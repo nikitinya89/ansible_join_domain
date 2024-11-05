@@ -1,0 +1,38 @@
+- hosts: all
+  become: true
+  gather_facts: false
+  tasks:
+    name: Install packages
+    apt:
+      name:
+        - realmd
+        - libnss-sss
+        - libpam-sss
+        - sssd
+        - sssd-tools
+        - adcli
+        - samba-common
+        - krb5-user
+        - oddjob
+        - oddjob-mkhomedir
+        - packagekit
+    state: present
+    update_cache: true
+
+    name: Check if the system is already joined to the domain
+    shell: realm list
+    register: realm_status
+    ignore_errors: true
+
+    name: Join the domain if not already joined
+    shell: echo "{{ domain_password }}" | realm join --user="{{ domain_admin }}" {{ domain_name }}
+    when: realm_status.rc != 0
+    no_log: true
+
+    name: Add domain admins group to sudoers
+    copy:
+      src: files/domain_admins
+      dest: /etc/sudoers.d/domain_admins
+      owner: root
+      group: root
+      mode: 0440
