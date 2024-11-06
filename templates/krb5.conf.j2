@@ -1,0 +1,18 @@
+
+[libdefaults]
+    default_realm = {{ domain_name | upper }}
+
+[realms]
+	CONTOSO.COM = {
+		kdc = dc01.{{ domain_name }} 
+		admin_server = dc01.{{ domain_name }} 
+		default_domain = {{ domain_name }}
+	}
+
+[login]
+	krb4_convert = true
+	krb4_get_tickets = false
+	
+[domain_realm]
+        . {{ domain_name }} = {{ domain_name | upper }}
+        {{ domain_name }} = {{ domain_name | upper }}

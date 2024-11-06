@@ -1,38 +1,73 @@
 - hosts: all
   become: true
   gather_facts: false
+  vars:
+    - domain_name: "example.com"
+    - domain_admin: "admin"
+    - domain_password: "Qwerty123"
   tasks:
-    name: Install packages
-    apt:
-      name:
-        - realmd
-        - libnss-sss
-        - libpam-sss
-        - sssd
-        - sssd-tools
-        - adcli
-        - samba-common
-        - krb5-user
-        - oddjob
-        - oddjob-mkhomedir
-        - packagekit
-    state: present
-    update_cache: true
+    - name: Install packages
+      apt:
+        name:
+          - realmd
+          - libnss-sss
+          - libpam-sss
+          - libpam-modules
+          - libpam-modules-bin
+          - sssd
+          - sssd-tools
+          - adcli
+          - samba-common
+          - krb5-user
+          - oddjob
+          - oddjob-mkhomedir
+          - packagekit
+      state: present
+      update_cache: true
 
-    name: Check if the system is already joined to the domain
-    shell: realm list
-    register: realm_status
-    ignore_errors: true
+    - name: Start sssd service
+      systemd:
+        name: sssd
+        state: started
+        enabled: true
 
-    name: Join the domain if not already joined
-    shell: echo "{{ domain_password }}" | realm join --user="{{ domain_admin }}" {{ domain_name }}
-    when: realm_status.rc != 0
-    no_log: true
+    - name: Check if the system is already joined to the domain
+      shell: realm list
+      register: realm_status
+      ignore_errors: true
 
-    name: Add domain admins group to sudoers
-    copy:
-      src: files/domain_admins
-      dest: /etc/sudoers.d/domain_admins
-      owner: root
-      group: root
-      mode: 0440
+    - name: Join the domain if not already joined
+      shell: echo "{{ domain_password }}" | realm join --user="{{ domain_admin }}" {{ domain_name }}
+      when: realm_status.rc != 0
+      no_log: true
+
+    - name: Permit domain admins
+      shell: realm permit -g 'domain admins'
+      when: "'domain admins' not in realm_status.stdout | lower"
+
+    - name: Add domain admins group to sudoers
+      copy:
+        src: files/domain_admins
+        dest: /etc/sudoers.d/domain_admins
+        owner: root
+        group: root
+        mode: 0440
+      
+    - name: Add sssd.conf file
+      template:
+        src: templates/sssd.conf.j2
+        dest: /etc/sssd/sssd.conf
+        owner: root
+        group: root
+        mode: 0600
+      notify: Restart sssd
+
+    - name: Reload sssd
+      meta: flush_handlers
+
+  handlers:
+    - name: Restart sssd
+      systemd:
+        name: sssd
+        state: restarted
+
