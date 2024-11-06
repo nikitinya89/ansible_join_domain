@@ -22,8 +22,8 @@
           - oddjob
           - oddjob-mkhomedir
           - packagekit
-      state: present
-      update_cache: true
+        state: present
+        update_cache: true
 
     - name: Start sssd service
       systemd:
@@ -35,10 +35,11 @@
       shell: realm list
       register: realm_status
       ignore_errors: true
+      changed_when: false
 
     - name: Join the domain if not already joined
       shell: echo "{{ domain_password }}" | realm join --user="{{ domain_admin }}" {{ domain_name }}
-      when: realm_status.rc != 0
+      when: realm_status.stdout == ""
       no_log: true
 
     - name: Permit domain admins
@@ -52,7 +53,11 @@
         owner: root
         group: root
         mode: 0440
-      
+
+    - name: Enable SSS auth and mkhomedir
+      shell: pam-auth-update --enable sss --enable mkhomedir
+      when: "'pam_sss.so' not in lookup('file', '/etc/pam.d/common-auth') or 'pam_mkhomedir.so' not in lookup('file', '/etc/pam.d/common-session')"
+
     - name: Add sssd.conf file
       template:
         src: templates/sssd.conf.j2
@@ -70,4 +75,3 @@
       systemd:
         name: sssd
         state: restarted
-
